@@ -86,7 +86,7 @@ Override fields in your profile's `cordis.patch.yml` under `id: fast-vps-viewer`
 
 ### Change settings in the panel
 
-The pane opens as a launcher: **Browser**, **Terminal**, **Add an app**, **Settings**. Pick a card and the session starts with that program; saved apps show up under "My apps" for one-click starts.
+The pane opens as a launcher: **Browser**, **Terminal**, **Files**, **Add an app**, **Settings**. Pick a card and the session starts with that program; saved apps show up under "My apps" for one-click starts.
 
 The Browser card is not hardcoded to Firefox: it asks the server (`GET /api/browser`) which binary exists — first of firefox, firefox-esr, chromium, google-chrome, epiphany — and shows that name on the card. When it cannot tell yet, it says "Auto-picks Chrome or Firefox".
 
@@ -101,6 +101,20 @@ Saving writes `~/.dsh/fast-vps-viewer.json` (mode 600), which takes priority ove
 | Use my ~/.ssh/config + agent (recommended) | The plugin runs exactly `ssh <host>`: `~/.ssh/config` (Host/User/Port/IdentityFile/ProxyJump) applies and ssh-agent keys are used. It adds `BatchMode=yes`, so it never prompts. | Your `ssh alias` already works in a terminal |
 | Specific private key file | Adds `-i <file> -o IdentitiesOnly=yes -o PreferredAuthentications=publickey`, so a per-host default identity in the config is ignored. | Several keys; you want to pick one |
 | Password | The stored password (0600, never returned by the API) is handed to ssh through `SSH_ASKPASS`. | The server only allows password login |
+
+### Files
+
+The launcher has a **Files** card: browse the remote tree (starts at `~`, bounded by `filesRoot`), download, delete, and upload.
+
+- Paths are guarded: anything outside `filesRoot` (including `../../etc`) is rejected;
+- Downloads use `GET /api/files/download`, deletes `POST /api/files/delete`, uploads `POST /api/upload`;
+- One upload is capped at 512 MB.
+
+### Dropping files onto the desktop
+
+While a session is open, drop local files onto the canvas. The plugin uploads them over SSH into `~/Downloads` on the VPS (configurable via `uploadDir`) and shows the resulting path.
+
+This moves the file **to the server**; it does not click the browser's attach button for you. In the remote browser, open the file picker and choose the file from `Downloads`. VNC itself cannot carry files, so this is the shortest honest path.
 
 ## Resource release
 

@@ -112,6 +112,13 @@ vncserver -kill :1   # → 进程全部退出，无残留
 
 **面板设置**（`/api/ping` 带 `features` 做能力协商，宿主与界面版本不一致时客户端会明确提示重启）：`GET/PUT /api/settings`，持久化到 `~/.dsh/fast-vps-viewer.json`（600），优先级高于 bundle 配置；面板右上「设置」直接改，运行中的会话可「保存并重启会话」立刻生效。
 
+## 7.1 文件与拖拽（2026-11-25）
+
+- `GET /api/files?path=` 列目录（远端 `find -printf`，不依赖 ls 解析），`GET /api/files/download` 流式下载，`POST /api/files/delete` 删除，`POST /api/upload` 走 ssh stdin 上传（≤512 MB）；
+- 路径只允许在 `filesRoot`（默认 `~`）之下，`~` 在命令里展开为 `"$HOME"`，避免注入；
+- 面板「文件」卡片提供浏览/下载/删除/上传；
+- 把本地文件拖到画面 → 上传到 `uploadDir`（默认 `~/Downloads`），再由用户在远端文件选择框里选它——VNC 本身不传文件，不能替用户点浏览器附件。
+
 ## 8. 里程碑
 
 - **M0 环境验证** ✅ 已在目标 VPS 上跑通 TigerVNC 起停。

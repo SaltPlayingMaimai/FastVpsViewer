@@ -131,6 +131,48 @@ window.__ModuleLoader__.load({
         borderRadius: 10,
       },
       sectionLabel: { fontSize: 11, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 0.4 },
+      fileList: { flex: 1, overflow: 'auto', padding: '4px 8px', display: 'flex', flexDirection: 'column', gap: 2 },
+      fileRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 6 },
+      fileName: {
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        textAlign: 'left',
+        font: 'inherit',
+        color: 'inherit',
+        background: 'transparent',
+        border: 0,
+        cursor: 'pointer',
+        padding: 0,
+      },
+      fileMeta: { fontSize: 11, opacity: 0.6, minWidth: 60, textAlign: 'right' },
+      dropZone: {
+        position: 'absolute',
+        inset: 0,
+        zIndex: 6,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(47, 129, 247, 0.18)',
+        border: '2px dashed #2f81f7',
+        fontSize: 13,
+        pointerEvents: 'none',
+      },
+      toast: {
+        position: 'absolute',
+        left: '50%',
+        bottom: 14,
+        transform: 'translateX(-50%)',
+        padding: '6px 12px',
+        borderRadius: 8,
+        background: 'rgba(22, 27, 34, 0.95)',
+        border: '1px solid rgba(127,127,127,0.35)',
+        fontSize: 12,
+        color: '#e6edf3',
+        zIndex: 8,
+      },
       groupTitle: { fontSize: 12, fontWeight: 600, opacity: 0.75, marginTop: 2 },
       checkboxRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' },
       form: { display: 'flex', flexDirection: 'column', gap: 10 },
@@ -172,7 +214,7 @@ window.__ModuleLoader__.load({
           const data = await res.json();
           if (!data || data.name !== 'fast-vps-viewer') continue;
           const features = Array.isArray(data.features) ? data.features : [];
-          if (!features.includes('settings')) {
+          if (!features.includes('settings') || !features.includes('files')) {
             outdated = true;
             continue;
           }
@@ -262,6 +304,12 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState(false);
       const [apps, setApps] = React.useState([]);
       const [browser, setBrowser] = React.useState(undefined);
+      const [view, setView] = React.useState('launcher');
+      const [files, setFiles] = React.useState(null);
+      const [filesError, setFilesError] = React.useState('');
+      const [toast, setToast] = React.useState('');
+      const [dropping, setDropping] = React.useState(false);
+      const [uploadDir, setUploadDir] = React.useState('~/Downloads');
       const [appFormOpen, setAppFormOpen] = React.useState(false);
       const [appName, setAppName] = React.useState('');
       const [appCommand, setAppCommand] = React.useState('');
@@ -284,6 +332,7 @@ window.__ModuleLoader__.load({
           const settings = await call(b, '/api/settings');
           if (!alive.current) return;
           setApps(settings.settings?.apps || []);
+          if (settings.settings?.uploadDir) setUploadDir(settings.settings.uploadDir);
           try {
             const detected = await call(b, '/api/browser');
             if (alive.current) setBrowser(detected.browser ?? null);
@@ -298,6 +347,72 @@ window.__ModuleLoader__.load({
       }, [base]);
 
       React.useEffect(() => { refresh(); }, [refresh]);
+
+      const human = (n) => (n > 1024 * 1024 ? `${(n / 1048576).toFixed(1)} MB` : n > 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+
+      const loadFiles = async (target) => {
+        setFilesError('');
+        try {
+          const b = base || (await probePort());
+          setBase(b);
+          const data = await call(b, `/api/files?path=${encodeURIComponent(target)}`);
+          if (alive.current) setFiles(data);
+        } catch (err) {
+          if (alive.current) setFilesError(String(err.message || err));
+        }
+      };
+
+      const downloadFile = (file) => {
+        const b = base || lastBase;
+        if (!b) return;
+        const target = files.path === '~' ? `~/${file.name}` : `${files.path}/${file.name}`;
+        const a = document.createElement('a');
+        a.href = `${b}/api/files/download?path=${encodeURIComponent(target)}`;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+
+      const deleteFile = async (file) => {
+        const target = files.path === '~' ? `~/${file.name}` : `${files.path}/${file.name}`;
+        if (typeof window.confirm === 'function' && !window.confirm(`${t('Delete', '删除')} ${target}?`)) return;
+        try {
+          const b = base || lastBase;
+          const res = await fetch(`${b}/api/files/delete`, {
+            method: 'POST',
+            headers: { 'x-fast-vps-viewer': '1', 'content-type': 'application/json' },
+            body: JSON.stringify({ path: target }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          loadFiles(files.path);
+        } catch (err) {
+          setFilesError(String(err.message || err));
+        }
+      };
+
+      const uploadFiles = async (fileList, dir) => {
+        const b = base || (await probePort());
+        setBase(b);
+        const total = fileList.length;
+        let ok = 0;
+        for (const file of fileList) {
+          try {
+            const res = await fetch(`${b}/api/upload?dir=${encodeURIComponent(dir)}`, {
+              method: 'POST',
+              headers: { 'x-fast-vps-viewer': '1', 'x-filename': file.name, 'content-type': 'application/octet-stream' },
+              body: file,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            ok += 1;
+          } catch (err) {
+            setToast(`${t('Upload failed: ', '上传失败：')}${err.message}`);
+          }
+        }
+        if (ok) setToast(t(`Uploaded ${ok}/${total} to ${dir}`, `已上传 ${ok}/${total} 个文件到 ${dir}`));
+      };
 
       const startWith = async (startup) => {
         setError(null);
@@ -612,11 +727,22 @@ window.__ModuleLoader__.load({
       ) : null;
 
       if (viewerUrl) {
-        return h('div', { style: styles.root },
+        return h('div', {
+          style: styles.root,
+          onDragOver: (e) => { e.preventDefault(); setDropping(true); },
+          onDragLeave: () => setDropping(false),
+          onDrop: (e) => {
+            e.preventDefault();
+            setDropping(false);
+            const dropped = Array.from(e.dataTransfer?.files || []);
+            if (dropped.length) uploadFiles(dropped, uploadDir).catch(() => {});
+          },
+        },
           h('div', { style: styles.bar },
             h('span', { style: styles.grow }, meta),
             h('button', { type: 'button', style: styles.button, onClick: openSettings }, t('Settings', '设置')),
           ),
+          dropping ? h('div', { style: styles.dropZone }, t('Drop files to upload to the VPS', '松手即上传到 VPS')) : null,
           h('iframe', {
             src: viewerUrl + (viewerUrl.includes('?') ? '&' : '?') + 'chrome=0',
             style: styles.frame,
@@ -626,6 +752,52 @@ window.__ModuleLoader__.load({
           settingsPanel,
         );
       }
+
+      const filesView = h('div', { style: styles.root },
+        h('div', { style: styles.bar },
+          h('button', { type: 'button', style: styles.button, onClick: () => setView('launcher') }, '←'),
+          h('span', { style: styles.grow }, files ? files.path : '~'),
+          h('button', {
+            type: 'button',
+            style: styles.button,
+            onClick: async () => {
+              const b = base || (await probePort());
+              setBase(b);
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.multiple = true;
+              input.onchange = () => uploadFiles(Array.from(input.files || []), files?.path || '~').then(() => loadFiles(files?.path || '~'));
+              input.click();
+            },
+          }, t('Upload', '上传')),
+          h('button', {
+            type: 'button',
+            style: styles.button,
+            disabled: !files?.parent,
+            onClick: () => files?.parent && loadFiles(files.parent),
+          }, t('Up', '上一级')),
+        ),
+        filesError ? h('div', { style: { ...styles.help, color: 'var(--dsw-alias-danger, #f85149)', padding: '6px 10px' } }, filesError) : null,
+        h('div', { style: styles.fileList },
+          !files ? h('div', { style: styles.help }, t('Loading…', '加载中…')) : null,
+          files?.entries?.length === 0 ? h('div', { style: styles.help }, t('This folder is empty', '这个目录是空的')) : null,
+          (files?.entries || []).map((entry) => h('div', { key: entry.name, style: styles.fileRow },
+            h('button', {
+              type: 'button',
+              style: styles.fileName,
+              onClick: () => {
+                if (entry.type === 'dir') loadFiles(files.path === '~' ? `~/${entry.name}` : `${files.path}/${entry.name}`);
+                else downloadFile(entry);
+              },
+              title: entry.type === 'dir' ? t('Open folder', '打开目录') : t('Download', '下载'),
+            }, `${entry.type === 'dir' ? '📁' : '📄'} ${entry.name}`),
+            h('span', { style: styles.fileMeta }, entry.type === 'dir' ? '—' : human(entry.size)),
+            entry.type === 'file' ? h('button', { type: 'button', style: styles.button, onClick: () => downloadFile(entry) }, t('Download', '下载')) : null,
+            h('button', { type: 'button', style: styles.button, onClick: () => deleteFile(entry) }, t('Delete', '删除')),
+          )),
+        ),
+        toast ? h('div', { style: styles.toast }, toast) : null,
+      );
 
       const loading = phase === 'loading' || phase === 'starting' || phase === 'stopping';
 
@@ -655,6 +827,8 @@ window.__ModuleLoader__.load({
         h('span', { style: styles.cardDesc }, desc),
       );
 
+      if (view === 'files' && !viewerUrl) return filesView;
+
       return h('div', { style: styles.root },
         h('div', { style: styles.launcher },
           h('div', { style: styles.launcherHead },
@@ -666,6 +840,7 @@ window.__ModuleLoader__.load({
             card('🌐', t('Browser', '浏览器'), browserText(), () => startWith(['browser'])),
             card('>_', t('Terminal', '命令行'), t('xterm, maximized', 'xterm，铺满窗口'), () => startWith(['xterm'])),
             card('＋', t('Add an app', '添加自定义 APP'), t('Any command, saved for later', '任意命令，保存下来下次直接用'), () => setAppFormOpen(true)),
+            card('📁', t('Files', '文件'), t('Browse, download, delete', '浏览、下载、删除'), async () => { setView('files'); await loadFiles('~'); }),
             card('⚙', t('Settings', '设置'), t('Connection, size, release', '连接、尺寸、回收'), openSettings),
           ),
           apps.length ? h('div', { style: styles.savedWrap },

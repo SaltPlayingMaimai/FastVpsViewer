@@ -38,6 +38,8 @@ const DEFAULTS = {
   geometry: '1600x900',
   autoResize: true,
   maximize: true,
+  filesRoot: '~',
+  uploadDir: '~/Downloads',
   desktop: 'openbox',
   startupCommands: ['browser'],
   apps: [],
@@ -356,10 +358,34 @@ class Controller {
     }
 
     if (url.pathname === '/api/ping') {
-      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings'], pid: process.pid });
+      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings', 'files', 'browser', 'launcher'], pid: process.pid });
     }
     if (url.pathname === '/api/status') return json(res, 200, this.statusPayload());
     if (url.pathname === '/api/logs') return json(res, 200, { lines: this.logs.slice(-200) });
+    if (url.pathname === '/api/files' && req.method === 'GET') {
+      this.listFiles(url.searchParams.get('path') || this.cfg.filesRoot)
+        .then((payload) => json(res, 200, payload))
+        .catch((err) => json(res, 400, { ok: false, error: describeError(err) }));
+      return;
+    }
+    if (url.pathname === '/api/files/download') {
+      this.downloadFile(res, url.searchParams.get('path') || '')
+        .catch((err) => json(res, 400, { ok: false, error: describeError(err) }));
+      return;
+    }
+    if (url.pathname === '/api/files/delete' && req.method === 'POST') {
+      readJsonBody(req)
+        .then((body) => this.deleteFile(body?.path))
+        .then((payload) => json(res, 200, payload))
+        .catch((err) => json(res, 400, { ok: false, error: describeError(err) }));
+      return;
+    }
+    if (url.pathname === '/api/upload' && req.method === 'POST') {
+      this.uploadFile(req, url.searchParams.get('dir'))
+        .then((payload) => json(res, 200, payload))
+        .catch((err) => json(res, 400, { ok: false, error: describeError(err) }));
+      return;
+    }
     if (url.pathname === '/api/browser') {
       return this.detectBrowser()
         .then((payload) => json(res, 200, payload))
@@ -423,6 +449,77 @@ class Controller {
     }
   }
 
+  listFiles(rawPath) {
+    const target = remotePath(rawPath, this.cfg);
+    const script = `find ${target} -mindepth 1 -maxdepth 1 -printf '%y\\t%s\\t%T@\\t%f\\n' 2>/dev/null `;
+    return sshExec(this.cfg, script, 20000, null, this.childEnv).then((res) => {
+      if (res.code === 255) throw new Error(tailText(res.stderr) || 'ssh 连接失败');
+      const entries = res.stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [type, size, mtime, ...rest] = line.split('\t');
+          return { type: type === 'd' ? 'dir' : 'file', size: Number(size), mtime: Number(mtime), name: rest.join('\t') };
+        })
+        .filter((entry) => entry.name);
+      return { path: displayPath(rawPath), parent: parentPath(rawPath), entries };
+    });
+  }
+
+  async downloadFile(res, rawPath) {
+    const target = remotePath(rawPath, this.cfg);
+    const child = spawn('ssh', sshArgs(this.cfg, [`cat -- ${target}`]), { env: { ...process.env, ...this.childEnv } });
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-disposition': `attachment; filename="${encodeURIComponent(path.basename(String(rawPath)))}"`,
+    });
+    child.stdout.pipe(res);
+    child.stderr.on('data', () => {});
+    child.on('error', () => res.destroy());
+  }
+
+  async deleteFile(rawPath) {
+    const target = remotePath(rawPath, this.cfg);
+    if (target === '$HOME' || target === '"$HOME"' || target.endsWith('/')) throw new Error('拒绝删除根目录');
+    const script = `if [ -d ${target} ]; then rmdir -- ${target} 2>/dev/null || rm -rf -- ${target}; else rm -f -- ${target}; fi`;
+    const res = await sshExec(this.cfg, script, 20000, null, this.childEnv);
+    if (res.code === 255) throw new Error(tailText(res.stderr) || 'ssh 连接失败');
+    return { ok: true };
+  }
+
+  async uploadFile(req, dirRaw) {
+    const name = sanitizeName(req.headers['x-filename'] || 'upload.bin');
+    const dir = remotePath(dirRaw || this.cfg.uploadDir, this.cfg);
+    const limit = 512 * 1024 * 1024;
+    let size = 0;
+    const child = spawn('ssh', sshArgs(this.cfg, [`mkdir -p ${dir} && cat > ${dir}/'${name}'`]), {
+      env: { ...process.env, ...this.childEnv },
+      stdio: ['pipe', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (b) => { stderr += b.toString(); });
+    const done = new Promise((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(tailText(stderr) || `scp exit ${code}`))));
+    });
+    await new Promise((resolve, reject) => {
+      req.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > limit) {
+          child.kill('SIGKILL');
+          reject(new Error('文件超过 512MB 限制'));
+          return;
+        }
+        if (!child.stdin.write(chunk)) req.pause();
+        child.stdin.once('drain', () => req.resume());
+      });
+      req.on('end', () => { child.stdin.end(); resolve(); });
+      req.on('error', reject);
+    });
+    await done;
+    return { ok: true, path: `${displayPath(dirRaw || this.cfg.uploadDir)}/${name}`, size };
+  }
+
   async detectBrowser() {
     const now = Date.now();
     if (this.browserCache && now - this.browserCache.at < 60000) return this.browserCache.value;
@@ -455,7 +552,7 @@ class Controller {
     const next = { ...this.stored };
     const editable = [
       'sshHost', 'sshOptions', 'sshUser', 'sshPort', 'auth', 'identityFile', 'password',
-      'display', 'vncPort', 'geometry', 'autoResize', 'maximize', 'desktop',
+      'display', 'vncPort', 'geometry', 'autoResize', 'maximize', 'filesRoot', 'uploadDir', 'desktop',
       'startupCommands', 'apps', 'idleMinutes', 'maxSessionMinutes', 'remoteIdleSeconds',
     ];
     for (const key of editable) {
@@ -955,6 +1052,39 @@ function safeLog(ctx, level, message) {
   } catch {}
 }
 
+function expandRemote(p) {
+  const text = String(p || '').trim();
+  if (text === '~') return '"$HOME"';
+  if (text.startsWith('~/')) return `"$HOME"/'${text.slice(2).replace(/'/g, '')}'`;
+  return `'${text.replace(/'/g, '')}'`;
+}
+
+function remotePath(p, cfg) {
+  const text = String(p || '').trim();
+  if (!text || text.includes('\n')) throw new Error('非法路径');
+  const root = expandRemote(cfg.filesRoot);
+  const target = expandRemote(text);
+  if (target !== root && !target.startsWith(`${root}/`)) throw new Error('路径超出允许的范围');
+  return target;
+}
+
+function displayPath(p) {
+  return String(p || '').trim() || '~';
+}
+
+function parentPath(p) {
+  const text = displayPath(p);
+  if (text === '~' || text === '/') return null;
+  const cut = text.replace(/\/+$/, '').lastIndexOf('/');
+  if (cut <= 0) return '~';
+  return text.slice(0, cut);
+}
+
+function sanitizeName(name) {
+  const base = path.basename(String(name)).replace(/[^\w.\- ()\[\]]/g, '_').slice(0, 180);
+  return base || 'upload.bin';
+}
+
 function publicSettings(cfg) {
   return {
     sshHost: cfg.sshHost,
@@ -970,6 +1100,8 @@ function publicSettings(cfg) {
     geometry: cfg.geometry,
     autoResize: cfg.autoResize,
     maximize: cfg.maximize,
+    filesRoot: cfg.filesRoot,
+    uploadDir: cfg.uploadDir,
     desktop: cfg.desktop,
     startupCommands: cfg.startupCommands,
     apps: cfg.apps,

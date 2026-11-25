@@ -85,7 +85,7 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 
 ### 在面板里改设置
 
-面板打开就是一个启动器：**浏览器**、**命令行**、**添加自定义 APP**、**设置** 四张卡片，点哪张就按那个程序开会话；添加过的 APP 会留在「我的应用」里，下次一键启动。
+面板打开就是一个启动器：**浏览器**、**命令行**、**文件**、**添加自定义 APP**、**设置** 五张卡片，点哪张就按那个程序开会话；添加过的 APP 会留在「我的应用」里，下次一键启动。
 
 「浏览器」卡片不是写死 Firefox：插件会先问一下服务器（`GET /api/browser`），按 firefox → firefox-esr → chromium → google-chrome → epiphany 的顺序挑第一个存在的，卡片上直接显示检测到的名字（例如「服务器上的 Chromium」）；没检测到时显示「自动选择 Chrome / Firefox」。
 
@@ -100,6 +100,20 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 | 跟随系统 ssh 配置（推荐） | 插件执行的就是 `ssh <主机>`，和你终端里一模一样：读 `~/.ssh/config` 的 Host/User/Port/IdentityFile/ProxyJump，用 ssh-agent 里已加载的密钥。为了不卡住，它加了 `BatchMode=yes`，**不会弹任何提示** | 你已经配好 `ssh 别名`，终端里能直接登 |
 | 指定私钥文件 | 加 `-i <文件> -o IdentitiesOnly=yes -o PreferredAuthentications=publickey`，只用这一把钥匙，忽略 config 里的默认身份 | 多个 key、想明确指定用哪一个 |
 | 密码 | 用 `SSH_ASKPASS` 把本机保存的密码交给 ssh；密码文件 0600，接口只回「是否已保存」 | 服务器只开了密码登录 |
+
+### 文件
+
+启动器里多了「文件」卡片：浏览远端目录（默认从 `~` 开始，可用 `filesRoot` 限定范围）、下载、删除、上传。
+
+- 路径有护栏：只允许 `filesRoot` 之下，`../../etc` 之类会被拒绝；
+- 下载走 `GET /api/files/download`，删除走 `POST /api/files/delete`，上传走 `POST /api/upload`；
+- 上传单个文件上限 512 MB。
+
+### 把文件拖进画面
+
+在已连接的面板里，把本地文件**拖到画面上松手**，插件会通过 SSH 把它传到远端的 `~/Downloads`（可用 `uploadDir` 改），右下角提示落到哪个路径。
+
+注意这一步是「把文件送到服务器上」，**不是**替你在网页里点附件：接下来在远端浏览器的聊天框点上传/附件，文件选择框里选 `Downloads` 里那个文件即可。VNC 协议本身不传文件，所以这是能做到的最短路径。
 
 ## 资源释放
 
