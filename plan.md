@@ -160,3 +160,44 @@ vncserver -kill :1   # → 进程全部退出，无残留
 
 这三轮在真实浏览器/真实主机里暴露的问题与修法，见 `handoff.md` 的「调试记录」。
 
+## 11. 「点一下把文件塞进网页输入框」设计（2026-11-25）
+
+### 为什么不能直接做
+
+VNC 只传画面和键鼠事件，不传文件；浏览器里的「选择文件」是远端原生对话框。所以"拖进去就出现在聊天框附件里"必须绕过 VNC，在远端浏览器内部动手。三条可行路径，按侵入性排序：
+
+### 方案 A：文件架 + 人工一步（今天就能做，零风险）
+
+- 面板里加一个**文件架**：`~/Downloads` 与最近上传的文件，每项四个动作：下载 / 删除 / 复制远端路径 / 「待附加」；
+- 上传走已有的 `/api/upload`（拖拽或选择）；
+- 用户在网页里点附件，弹出的远端对话框直接定位到 `~/Downloads`（文件已排好序/最近在上）；
+- 诚实地说，这不是自动化，但它是所有方案的回退兜底，且不依赖浏览器类型。
+
+### 方案 B：Chromium + CDP 自动注入（真·点一下）
+
+前提：远端用 Chromium（Firefox 没有 CDP 的文件注入能力）。
+
+1. 启动浏览器时加 `--remote-debugging-port=9222 --remote-allow-origins=*`，只绑 `127.0.0.1`；
+2. 宿主用 SSH 隧道把 9222 接到本地（复用现有的 `-L` 机制），Node 22 自带全局 `WebSocket`，不需要额外依赖；
+3. 新增 `POST /api/attach {path}`：
+   - `Page.getFrameTree` 找到当前 frame；
+   - `DOM.getDocument` → `DOM.querySelector('input[type=file]')`；
+   - `DOM.setFileInputFiles({ nodeId, files: [远端绝对路径] })`；
+   - 找不到 input 时，回退到 `Input.dispatchDragEvent`（`dragData.files`），把文件模拟成拖放；
+   - 页面若用"点按钮才创建 input"的写法，先用 `Input.dispatchMouseEvent` 点一次上传按钮。
+4. 面板文件架上每项一个「塞进网页」按钮，调 `/api/attach`。
+
+风险与限制：只支持 Chromium；ChatGPT/Claude 等站点可能对自动化有检测；页面结构变化会让选择器失效（因此选择器做成可配，默认探测可见的 `input[type=file]`）。
+
+### 方案 C：WebExtension（Firefox / Chromium 都能用，最稳）
+
+- 插件自带一个极小的扩展 `fastvps-attach`：content script 连本地 WebSocket（经 SSH 隧道到宿主），收到文件字节后构造 `File`，在页面里找 `input[type=file]` 或派发 `drop` 事件；
+- 优点：不依赖浏览器调试端口、不伪造 CDP、对页面"拖放上传"的网站最自然；
+- 代价：要往远端浏览器 profile 里装扩展（Firefox 需要 `policies.json` 或临时加载；Chromium 需要 `--load-extension`），属于"一次安装、长期生效"。
+
+### 推荐路线
+
+1. 先做方案 A 的文件架（小、稳、立刻有用，也是 B/C 的 UI 基础）；
+2. 默认浏览器目前是 Firefox ESR → 走**方案 C** 更匹配；如果你愿意在远端装 Chromium，方案 B 的开发量更小；
+3. 无论哪条，**永远不自动点发送**：只把文件放进输入框/附件区，发送仍由人按。
+

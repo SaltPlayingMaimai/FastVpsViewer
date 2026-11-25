@@ -150,6 +150,7 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 
 - 只支持 Linux 远端（TigerVNC）。
 - 不做剪贴板双向、文件传输、音频、多显示器。
+- 目前**不能**把文件自动塞进网页的附件框：拖进画面只是把文件传到服务器 `~/Downloads`。要"点一下就附加"需要 CDP 或浏览器扩展，设计在 `plan.md` §11。
 - client 半边依赖 DSH 的右侧栏槽位；如果你的 DSH 版本没有开放，会降级成输入框旁的一个按钮。
 
 ## 开发

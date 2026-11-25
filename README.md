@@ -148,6 +148,7 @@ Only processes this plugin started are ever killed: release targets the configur
 
 - Linux remotes only (TigerVNC).
 - No bidirectional clipboard, file transfer, audio, or multi-monitor.
+- It **cannot** attach a file to a web page for you yet: dropping a file only uploads it to `~/Downloads` on the server. Doing the attach needs CDP or a browser extension; see `plan.md` §11.
 - The client half depends on the DSH right-sidebar slots; without them it falls back to a button next to the composer.
 
 ## Development
