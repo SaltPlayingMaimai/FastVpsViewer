@@ -20,9 +20,9 @@ When all you wanted was to look at something and click twice.
 
 **FastVpsViewer is built for that "occasionally".** Nothing resident, no public port, no heavyweight stack: when you need it, it starts a tens-of-megabytes Openbox desktop on the VPS (TigerVNC ships its own X server, so no Xvfb), carries the framebuffer over the SSH connection you already have, and embeds it in the DSH right sidebar. Close it and the plugin runs `vncserver -kill`; the machine goes back to being a quiet terminal.
 
-![Launcher: browser / terminal / custom app / settings](docs/launcher.png)
+![Launcher: browser / terminal / custom app / settings](docs/ui-launcher.png)
 
-![The remote desktop inside the DSH sidebar](docs/screenshot.png)
+![The remote desktop inside the DSH sidebar](docs/ui-desktop.png)
 
 ```
 ┌────────── local DSH ──────────┐        ┌────────── VPS ──────────┐

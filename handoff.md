@@ -196,6 +196,14 @@ plan.md           设计与计划
 5. 站点检测（ChatGPT/Claude 可能识别自动化）要写进 README 的已知限制。
 
 
+## 截图文件名带版本（2026-11-25）
+
+GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/launcher.png` 仍可能被旧的未脱敏图命中。所以截图不再用固定名字：
+
+- `docs/ui-launcher.png`、`docs/ui-desktop.png`；
+- 以后每次换图都换一个新文件名（旧文件删除），README 同步改链接；
+- 名字里不要带含义（launcher/screenshot 足矣），避免下次又踩缓存。
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

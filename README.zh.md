@@ -20,9 +20,9 @@
 
 **FastVpsViewer 就是为这个"偶尔"做的。** 不常驻、不开公网端口、不装重型组件：要用的时候它在 VPS 上拉起一个几十 MB 的 Openbox 桌面（TigerVNC 自带 X server，连 Xvfb 都不用），顺着你已经在用的 SSH 连接把画面嵌进 DSH 右侧栏；你关掉页面，它 `vncserver -kill` 收干净，机器回到只剩终端的安静状态。
 
-![启动器：浏览器 / 命令行 / 自定义 APP / 设置](docs/launcher.png)
+![启动器：浏览器 / 命令行 / 自定义 APP / 设置](docs/ui-launcher.png)
 
-![在 DSH 侧栏里打开的远端桌面](docs/screenshot.png)
+![在 DSH 侧栏里打开的远端桌面](docs/ui-desktop.png)
 
 ```
 ┌──────── 本地 DSH ────────┐        ┌──────── VPS ────────┐
