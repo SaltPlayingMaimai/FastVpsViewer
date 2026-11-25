@@ -180,6 +180,29 @@ window.__ModuleLoader__.load({
         animation: 'fvvspin 0.9s linear infinite',
       },
       spinnerText: { fontSize: 12, opacity: 0.8 },
+      banner: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid rgba(210, 153, 34, 0.45)',
+        background: 'rgba(210, 153, 34, 0.10)',
+        fontSize: 12,
+      },
+      bannerText: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 },
+      bannerCmd: { fontFamily: 'ui-monospace, monospace', fontSize: 11, opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' },
+      installLog: {
+        margin: 0,
+        padding: '6px 8px',
+        maxHeight: 120,
+        overflow: 'auto',
+        fontSize: 11,
+        fontFamily: 'ui-monospace, monospace',
+        background: 'rgba(127,127,127,0.10)',
+        borderRadius: 6,
+        whiteSpace: 'pre-wrap',
+      },
       clipPanel: {
         position: 'absolute',
         top: 40,
@@ -359,6 +382,9 @@ window.__ModuleLoader__.load({
       const [clipOpen, setClipOpen] = React.useState(false);
       const [clipText, setClipText] = React.useState('');
       const [remoteClip, setRemoteClip] = React.useState('');
+      const [preflight, setPreflight] = React.useState(null);
+      const [installing, setInstalling] = React.useState(false);
+      const [installOutput, setInstallOutput] = React.useState('');
       const [clipNotice, setClipNotice] = React.useState('');
       const frameRef = React.useRef(null);
       const [uploadDir, setUploadDir] = React.useState('~/Downloads');
@@ -496,6 +522,30 @@ window.__ModuleLoader__.load({
           }
         }
         if (ok) setToast(t(`Uploaded ${ok}/${total} to ${dir}`, `已上传 ${ok}/${total} 个文件到 ${dir}`));
+      };
+
+      const installDeps = async () => {
+        setInstalling(true);
+        setInstallOutput('');
+        try {
+          const b = base || (await probePort());
+          setBase(b);
+          const res = await fetch(`${b}/api/install`, {
+            method: 'POST',
+            headers: { 'x-fast-vps-viewer': '1', 'content-type': 'application/json' },
+            body: '{}',
+          });
+          const data = await res.json();
+          setInstallOutput(data.output || data.error || '');
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          setPreflight(data.preflight || null);
+          const detected = await call(b, '/api/browser').catch(() => null);
+          if (detected) setBrowser(detected.browser ?? null);
+        } catch (err) {
+          setInstallOutput(String(err.message || err));
+        } finally {
+          setInstalling(false);
+        }
       };
 
       const openTerminal = async () => {
@@ -1006,6 +1056,23 @@ window.__ModuleLoader__.load({
             meta ? h('div', { style: styles.help }, meta) : null,
           ),
           error ? h('div', { style: { color: 'var(--dsw-alias-danger, #f85149)', fontSize: 12 } }, error) : null,
+          preflight && preflight.missing && preflight.missing.length ? h('div', { style: styles.banner },
+            h('div', { style: styles.bannerText },
+              `${t('Missing on the server:', '服务器缺少：')} ${preflight.missing.join(' / ')}`,
+              preflight.command ? h('div', { style: styles.bannerCmd }, preflight.command) : null,
+            ),
+            h('button', {
+              type: 'button',
+              style: styles.primary,
+              disabled: installing,
+              onClick: installDeps,
+            }, installing ? t('Installing…', '安装中…') : t('Install', '一键安装')),
+          ) : null,
+          installing ? h('div', { style: styles.inlineLoading },
+            h('div', { style: styles.spinnerSmall }),
+            h('span', null, t('Installing packages on the server…', '正在服务器上安装依赖…')),
+          ) : null,
+          installOutput ? h('pre', { style: styles.installLog }, installOutput.slice(-1200)) : null,
           h('div', { style: styles.grid },
             card('🌐', t('Browser', '浏览器'), browserText(), () => startWith(['browser'])),
             card('>_', t('Terminal', '命令行'), t('SSH shell, no desktop', 'SSH 命令行，不启动桌面'), openTerminal),

@@ -137,6 +137,13 @@ vncserver -kill :1   # → 进程全部退出，无残留
 - 文件类操作（list/download/delete/upload/探测浏览器）共用一条 `ControlMaster=auto` 的 SSH 多路连接（`ControlPersist=60`），第一次慢、之后亚秒级；
 - 顺带修了一个会让宿主进程崩溃的 bug：`listFiles` 里路径校验同步抛错时没有被 promise 捕获 → 改成 async 方法。
 
+## 7.7 依赖预检与一键安装（2026-11-25）
+
+- `GET /api/preflight`：一次 SSH 里探测 `vncserver` / `openbox` / 浏览器 / 包管理器 / 是否 root，返回缺失项和将要执行的命令；
+- `POST /api/install`：**服务端自己**根据预检结果拼包名（apt: tigervnc-standalone-server/openbox/firefox-esr；dnf/pacman 对应名），root 直跑、否则 `sudo -n`，超时 300s，返回输出尾部；
+- 安全：接口不接受包名或命令，避免把注入面开到公网回环以外的任何地方；
+- 面板：缺依赖时显示黄色横幅 + 「一键安装」，安装中显示日志。
+
 ## 8. 里程碑
 
 - **M0 环境验证** ✅ 已在目标 VPS 上跑通 TigerVNC 起停。

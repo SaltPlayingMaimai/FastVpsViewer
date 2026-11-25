@@ -44,6 +44,22 @@ apt install -y tigervnc-standalone-server openbox
 - `openbox` 是默认的窗口管理器，也可以用配置项换成别的。
 - 远端 sshd 正常、你的 key 能免密登录即可。插件不会在远端安装任何自己的东西，只在 `~/.fast-vps-viewer/` 写一个 `xstartup.sh`。
 
+### 服务器缺依赖怎么办
+
+面板打开时会跑一次预检（`GET /api/preflight`），发现缺东西就在启动器顶部显示一条黄色提示：
+
+```
+服务器缺少：tigervnc / openbox / browser      [一键安装]
+apt-get install -y tigervnc-standalone-server openbox firefox-esr
+```
+
+点「一键安装」会执行这条命令（`POST /api/install`），面板上显示安装日志，装完自动重新预检。
+
+- 包管理器自动识别：apt / dnf / pacman；
+- 已是 root 就直接跑，否则用 `sudo -n`（免密 sudo），失败会把原因显示出来；
+- **要装什么由服务器自己算**：客户端不能指定包名，接口不接受任何命令输入；
+- 一键安装只装缺的那几样：TigerVNC、openbox、以及一个浏览器（没装时）。
+
 ## 安装
 
 ```sh

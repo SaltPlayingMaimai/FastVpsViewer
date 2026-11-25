@@ -231,6 +231,13 @@ GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/
 - 实测：无头环境里点「粘贴到远端」，iframe 收到 `{"type":"fvv-paste","text":"hunter2-password","sendCtrlV":true}` 且无报错；真实粘贴效果需在真机确认（焦点位置、站点是否允许密码框粘贴）；
 - 限制：仅文本；依赖 TigerVNC 剪贴板。
 
+## 依赖预检与一键安装（2026-11-25）
+
+- `GET /api/preflight`、`POST /api/install`，包名由宿主根据探测结果决定，接口不接收任何命令/包名；
+- `installCommand()` 支持 apt / dnf / pacman，非 root 走 `sudo -n`；
+- 实测（本机 VPS 已装齐）：preflight 返回 `missing: []`，install 返回 `nothing to install`；
+- 面板横幅**未在无头环境验证**：Playwright 的 `route` 拦截预检请求时会因为 CORS 预检被替换而失败，真实浏览器（同源回环）不受影响，需真机确认一次。
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

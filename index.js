@@ -364,6 +364,18 @@ class Controller {
     }
     if (url.pathname === '/api/status') return json(res, 200, this.statusPayload());
     if (url.pathname === '/api/logs') return json(res, 200, { lines: this.logs.slice(-200) });
+    if (url.pathname === '/api/preflight') {
+      this.preflight()
+        .then((payload) => json(res, 200, payload))
+        .catch((err) => json(res, 200, { error: describeError(err), missing: [] }));
+      return;
+    }
+    if (url.pathname === '/api/install' && req.method === 'POST') {
+      this.installDeps()
+        .then((payload) => json(res, 200, payload))
+        .catch((err) => json(res, 400, { ok: false, error: describeError(err) }));
+      return;
+    }
     if (url.pathname === '/api/terminal' && req.method === 'POST') {
       this.termToken = crypto.randomBytes(18).toString('hex');
       return json(res, 200, {
@@ -465,6 +477,57 @@ class Controller {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('not found');
     }
+  }
+
+  async preflight() {
+    const script = [
+      'echo "uid=$(id -u)"',
+      'command -v vncserver >/dev/null 2>&1 && echo "vnc=1" || echo "vnc=0"',
+      'command -v openbox >/dev/null 2>&1 && echo "wm=1" || echo "wm=0"',
+      'for b in firefox firefox-esr chromium chromium-browser google-chrome epiphany-browser; do command -v "$b" >/dev/null 2>&1 && { echo "browser=$b"; break; }; done',
+      'if command -v apt-get >/dev/null 2>&1; then echo "pm=apt"; elif command -v dnf >/dev/null 2>&1; then echo "pm=dnf"; elif command -v pacman >/dev/null 2>&1; then echo "pm=pacman"; else echo "pm=none"; fi',
+    ].join('; ');
+    const res = await this.auxExec(script, 25000);
+    const text = res.stdout || '';
+    const pick = (key) => {
+      const match = new RegExp(`^${key}=(.*)$`, 'm').exec(text);
+      return match ? match[1].trim() : '';
+    };
+    const pm = pick('pm') || 'none';
+    const vnc = pick('vnc') === '1';
+    const wm = pick('wm') === '1';
+    const browser = pick('browser') || null;
+    const root = pick('uid') === '0';
+    const packages = [];
+    if (!vnc) packages.push(pm === 'apt' ? 'tigervnc-standalone-server' : 'tigervnc');
+    if (!wm) packages.push('openbox');
+    if (!browser && pm !== 'none') packages.push(pm === 'apt' ? 'firefox-esr' : 'firefox');
+    const command = packages.length ? installCommand(pm, packages, root) : null;
+    return {
+      ok: true,
+      root,
+      pm,
+      vnc,
+      wm,
+      browser,
+      missing: [!vnc && 'tigervnc', !wm && 'openbox', !browser && 'browser'].filter(Boolean),
+      packages,
+      command,
+    };
+  }
+
+  async installDeps() {
+    const pre = await this.preflight();
+    if (!pre.packages.length) {
+      return { ok: true, installed: [], output: 'nothing to install', preflight: pre };
+    }
+    if (pre.pm === 'none') throw new Error('远端没有可用的包管理器（apt/dnf/pacman）');
+    const command = installCommand(pre.pm, pre.packages, pre.root);
+    const res = await this.auxExec(command, 300000);
+    const output = tailText(`${res.stdout}\n${res.stderr}`.trim(), 1200);
+    if (res.code !== 0) throw new Error(`安装失败（exit ${res.code}）：${output}`);
+    const after = await this.preflight();
+    return { ok: true, installed: pre.packages, output, preflight: after };
   }
 
   async auxExec(script, timeout = 20000) {
@@ -1202,6 +1265,16 @@ function parentPath(p) {
 function sanitizeName(name) {
   const base = path.basename(String(name)).replace(/[^\w.\- ()\[\]]/g, '_').slice(0, 180);
   return base || 'upload.bin';
+}
+
+function installCommand(pm, packages, root) {
+  const list = packages.join(' ');
+  const base = pm === 'apt'
+    ? `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${list}`
+    : pm === 'dnf'
+      ? `dnf install -y ${list}`
+      : `pacman -Sy --noconfirm ${list}`;
+  return root ? base : `sudo -n sh -c '${base.replace(/'/g, '')}'`;
 }
 
 function publicSettings(cfg) {

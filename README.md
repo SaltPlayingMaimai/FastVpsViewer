@@ -44,6 +44,22 @@ apt install -y tigervnc-standalone-server openbox
 - `openbox` is the default window manager and can be replaced through config.
 - Passwordless SSH with a key must work. The plugin writes only `~/.fast-vps-viewer/xstartup.sh` on the remote host.
 
+### Missing dependencies
+
+Opening the pane runs a preflight (`GET /api/preflight`). Anything missing shows a yellow banner at the top of the launcher:
+
+```
+Missing on the server: tigervnc / openbox / browser      [Install]
+apt-get install -y tigervnc-standalone-server openbox firefox-esr
+```
+
+**Install** runs that command (`POST /api/install`) and streams its tail into the panel, then re-runs the preflight.
+
+- the package manager is detected (apt / dnf / pacman);
+- runs directly as root, otherwise through `sudo -n`; failures are shown verbatim;
+- **the server decides what to install** — the client cannot send package names or commands;
+- only the missing pieces are installed: TigerVNC, openbox, and a browser when none exists.
+
 ## Install
 
 ```sh
