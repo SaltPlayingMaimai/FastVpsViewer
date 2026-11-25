@@ -122,7 +122,7 @@ vncserver -kill :1   # → 进程全部退出，无残留
 ## 7.3 命令行不再经过 VNC（2026-11-25）
 
 - 「命令行」卡片改为 `POST /api/terminal` → `terminal.html` → `ws://…/term` → 宿主 spawn `ssh -tt <host> 'stty rows R cols C; exec bash -l'`；
-- 浏览器侧用内置 xterm.js（MIT）渲染，面板宽高换算成 PTY 大小；
+- 浏览器侧用内置 xterm.js（MIT）渲染，面板宽高换算成 PTY 大小；远端跑 `bash -l -i`（登录 shell，提示符与 PATH 正常）；
 - 好处：不启动 X/VNC，1 秒级可用；关标签即断开 SSH；
 - 局限：PTY 大小在打开时固定，之后缩放面板不会重排；`ssh -tt` 依赖服务器允许分配 pty。
 

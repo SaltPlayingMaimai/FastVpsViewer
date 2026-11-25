@@ -234,7 +234,7 @@ window.__ModuleLoader__.load({
           const data = await res.json();
           if (!data || data.name !== 'fast-vps-viewer') continue;
           const features = Array.isArray(data.features) ? data.features : [];
-          if (!features.includes('settings') || !features.includes('files') || !features.includes('terminal')) {
+          if (!features.includes('settings') || !features.includes('files') || !features.includes('terminal-init')) {
             outdated = true;
             continue;
           }

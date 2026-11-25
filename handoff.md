@@ -214,6 +214,8 @@ GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/
 - 浏览器启动加了 spinner（`phase=starting`），实测 4 秒左右出画面；
 - 能力协商新增 `terminal`，客户端只连同时具备 settings/files/terminal 的宿主，旧实例会被跳过（否则会回 `not found` 的非 JSON 错误）。
 
+| 命令行里没有提示符（一片空白） | 三处叠加：①`exec bash … 2>/dev/null` 把 bash 的 stderr 重定向到了 /dev/null，而 PS1 正是写到 stderr；②bash 的首个提示符要等 ssh 管道里有输入才被 flush；③客户端还没握手完宿主就 spawn，早期字节可能丢 | 去掉 `2>/dev/null`；客户端 open 后先发 `{"init":{cols,rows}}`，宿主收到再 spawn；宿主 spawn 后用 `space+backspace` 每 400ms 轻推一次直到有输出（屏幕上不可见）；实测提示符 `root@claude-test:~#` 正常，`command -v claude` 能找到 `/root/.local/bin/claude` |
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

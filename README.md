@@ -106,6 +106,7 @@ Saving writes `~/.dsh/fast-vps-viewer.json` (mode 600), which takes priority ove
 
 It does not start a desktop: the card opens an xterm.js terminal connected straight to the server over `ssh -tt`, so there is no X server and no VNC to wait for — it is usually usable within a second.
 
+- it is a **login shell**, so you get the usual `user@host:cwd#` prompt with your `PATH`, aliases and `~/.local/bin` loaded;
 - the panel size becomes the PTY's cols/rows at open time (resizing the panel later does not change the remote PTY);
 - closing the tab drops the SSH connection, leaving nothing behind;
 - xterm.js is bundled (MIT, see `vendor/xterm/LICENSE`).

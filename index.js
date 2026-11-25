@@ -358,7 +358,7 @@ class Controller {
     }
 
     if (url.pathname === '/api/ping') {
-      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings', 'files', 'browser', 'terminal', 'launcher'], pid: process.pid });
+      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings', 'files', 'browser', 'terminal', 'terminal-init', 'launcher'], pid: process.pid });
     }
     if (url.pathname === '/api/status') return json(res, 200, this.statusPayload());
     if (url.pathname === '/api/logs') return json(res, 200, { lines: this.logs.slice(-200) });
@@ -686,35 +686,80 @@ class Controller {
     if (proto) headers.push(`Sec-WebSocket-Protocol: ${String(proto).split(',')[0].trim()}`);
     socket.write(`${headers.join('\r\n')}\r\n\r\n`);
 
-    const cols = Math.max(20, Math.min(300, Number.parseInt(url.searchParams.get('cols') || '100', 10) || 100));
-    const rows = Math.max(8, Math.min(100, Number.parseInt(url.searchParams.get('rows') || '30', 10) || 30));
-    const remote = [
-      `export TERM=xterm-256color`,
-      `stty rows ${rows} cols ${cols} 2>/dev/null`,
-      'exec bash -l 2>/dev/null || exec sh -l',
-    ].join('; ');
-    const shell = spawn('ssh', [...sshBaseArgs(this.cfg), '-tt', this.cfg.sshHost, remote], {
-      env: { ...process.env, ...this.childEnv },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
     const ws = new WsFrameChannel(socket);
+    let shell = null;
     let closed = false;
     const shutdown = () => {
       if (closed) return;
       closed = true;
-      try { shell.kill('SIGTERM'); } catch {}
-      try { socket.destroy(); } catch {}
+      if (shell) {
+        try { shell.kill('SIGTERM'); } catch { /* gone */ }
+      }
+      try { socket.destroy(); } catch { /* gone */ }
     };
-    ws.onmessage = (payload) => {
-      if (!shell.stdin.destroyed) shell.stdin.write(payload);
+
+    const spawnShell = (cols, rows) => {
+      if (shell) return;
+      const remote = [
+        'export TERM=xterm-256color',
+        `stty rows ${rows} cols ${cols} 2>/dev/null`,
+        `export PS1='\\u@\\h:\\w\\$ '`,
+        'exec bash -l -i',
+      ].join('; ');
+      shell = spawn('ssh', [...sshBaseArgs(this.cfg), '-tt', this.cfg.sshHost, remote], {
+        env: { ...process.env, ...this.childEnv },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      // bash's first prompt is not flushed through the ssh pipe until some
+      // input arrives, and writes made before the remote pty is ready are
+      // dropped. Nudge with "space + backspace" (invisible on screen) until
+      // the shell actually answers.
+      let heard = false;
+      let tries = 0;
+      const nudge = setInterval(() => {
+        if (heard || tries >= 8) { clearInterval(nudge); return; }
+        tries += 1;
+        try { shell.stdin.write(' \b'); } catch { clearInterval(nudge); }
+      }, 400);
+      const onData = (chunk) => {
+        heard = true;
+        clearInterval(nudge);
+        ws.sendBinary(chunk);
+      };
+      shell.stdout.on('data', onData);
+      shell.stderr.on('data', (chunk) => onData(Buffer.from(chunk)));
+      shell.on('close', shutdown);
+      shell.on('error', shutdown);
+      this.log('terminal connected');
     };
-    shell.stdout.on('data', (chunk) => ws.sendBinary(chunk));
-    shell.stderr.on('data', (chunk) => ws.sendBinary(Buffer.from(chunk)));
-    shell.on('close', shutdown);
-    shell.on('error', shutdown);
+
+    // The browser announces itself with {"init":{"cols":N,"rows":M}} once its
+    // WebSocket is really open; spawning the shell before that loses the first
+    // prompt bytes, which are sent the moment bash starts.
+    let initialised = false;
+    ws.onmessage = (payload, isText) => {
+      const text = payload.length < 200 ? payload.toString('utf8') : '';
+      if (!initialised && isText && text.startsWith('{')) {
+        try {
+          const message = JSON.parse(text);
+          if (message && message.init) {
+            initialised = true;
+            spawnShell(
+              Math.max(20, Math.min(300, Number(message.init.cols) || 100)),
+              Math.max(8, Math.min(100, Number(message.init.rows) || 30)),
+            );
+            return;
+          }
+        } catch { /* not our control message */ }
+      }
+      initialised = true;
+      if (!shell) spawnShell(100, 30);
+      if (shell && !shell.stdin.destroyed) shell.stdin.write(payload);
+    };
+
+    setTimeout(() => { if (!closed) { initialised = true; spawnShell(100, 30); } }, 2000);
     socket.on('close', shutdown);
     socket.on('error', shutdown);
-    this.log('terminal connected');
   }
 
   pushLog(line) {

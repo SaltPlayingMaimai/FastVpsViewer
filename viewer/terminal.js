@@ -31,6 +31,9 @@
 
   ws.addEventListener('open', () => {
     status.textContent = 'connected';
+    // Tell the host we are ready before it starts bash, otherwise the first
+    // prompt (written immediately) races the WebSocket handshake.
+    ws.send(JSON.stringify({ init: { cols, rows } }));
     term.focus();
   });
   ws.addEventListener('message', (event) => {

@@ -105,6 +105,7 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 
 「命令行」卡片不会拉起桌面：它打开一个 xterm.js 终端，直接通过 SSH 连到你的服务器（`ssh -tt`），所以**不用等 X 和 VNC 起来**，通常 1 秒内可用。
 
+- 打开就是**登录 shell**，会显示 `user@host:cwd#` 这样的提示符，`PATH`、别名、`~/.local/bin` 都正常加载；
 - 面板尺寸会换算成 PTY 的列/行（打开时确定，之后缩放面板不会改变远端 PTY 大小）；
 - 关闭这个标签就断开 SSH，不留进程；
 - 用的是内置的 xterm.js（MIT，见 `vendor/xterm/LICENSE`）。
