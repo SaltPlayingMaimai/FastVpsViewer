@@ -85,7 +85,7 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 
 ### 在面板里改设置
 
-面板打开就是一个启动器：**浏览器**、**命令行**、**文件**、**添加自定义 APP**、**设置** 五张卡片，点哪张就按那个程序开会话；添加过的 APP 会留在「我的应用」里，下次一键启动。
+面板打开就是一个启动器：**浏览器**、**命令行**（真 SSH 终端，不走 VNC）、**文件**、**添加自定义 APP**、**设置** 五张卡片，点哪张就按那个程序开会话；添加过的 APP 会留在「我的应用」里，下次一键启动。
 
 「浏览器」卡片不是写死 Firefox：插件会先问一下服务器（`GET /api/browser`），按 firefox → firefox-esr → chromium → google-chrome → epiphany 的顺序挑第一个存在的，卡片上直接显示检测到的名字（例如「服务器上的 Chromium」）；没检测到时显示「自动选择 Chrome / Firefox」。
 
@@ -100,6 +100,14 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 | 跟随系统 ssh 配置（推荐） | 插件执行的就是 `ssh <主机>`，和你终端里一模一样：读 `~/.ssh/config` 的 Host/User/Port/IdentityFile/ProxyJump，用 ssh-agent 里已加载的密钥。为了不卡住，它加了 `BatchMode=yes`，**不会弹任何提示** | 你已经配好 `ssh 别名`，终端里能直接登 |
 | 指定私钥文件 | 加 `-i <文件> -o IdentitiesOnly=yes -o PreferredAuthentications=publickey`，只用这一把钥匙，忽略 config 里的默认身份 | 多个 key、想明确指定用哪一个 |
 | 密码 | 用 `SSH_ASKPASS` 把本机保存的密码交给 ssh；密码文件 0600，接口只回「是否已保存」 | 服务器只开了密码登录 |
+
+### 命令行走的是真 SSH，不经过 VNC
+
+「命令行」卡片不会拉起桌面：它打开一个 xterm.js 终端，直接通过 SSH 连到你的服务器（`ssh -tt`），所以**不用等 X 和 VNC 起来**，通常 1 秒内可用。
+
+- 面板尺寸会换算成 PTY 的列/行（打开时确定，之后缩放面板不会改变远端 PTY 大小）；
+- 关闭这个标签就断开 SSH，不留进程；
+- 用的是内置的 xterm.js（MIT，见 `vendor/xterm/LICENSE`）。
 
 ### 文件
 

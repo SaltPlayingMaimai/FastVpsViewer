@@ -207,6 +207,13 @@ GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/
 
 补充判断（2026-11-25）：B/C 都**不新增常驻进程、不开公网端口**，闲置占用为 0；它们只是多了磁盘产物（Chromium 包 / 扩展包）。所以不违背"运行期不常驻"，但违背更严格的"远端零安装"。落地时做成可选能力：没装扩展就回退到方案 A 的手动选文件。
 
+## 命令行改走 SSH / 启动动画（2026-11-25）
+
+- `POST /api/terminal` 发一次性 token，`terminal.html` 用内置 xterm.js 连 `ws /term`，宿主 `ssh -tt` 起登录 shell，并按面板尺寸 `stty rows/cols`；
+- 实测：面板内输入 `echo PANEL_TERM_OK` 回显正确；不产生 Xtigervnc 进程；
+- 浏览器启动加了 spinner（`phase=starting`），实测 4 秒左右出画面；
+- 能力协商新增 `terminal`，客户端只连同时具备 settings/files/terminal 的宿主，旧实例会被跳过（否则会回 `not found` 的非 JSON 错误）。
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

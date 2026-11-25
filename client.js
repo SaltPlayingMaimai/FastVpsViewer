@@ -160,6 +160,26 @@ window.__ModuleLoader__.load({
         fontSize: 13,
         pointerEvents: 'none',
       },
+      spinnerWrap: {
+        position: 'absolute',
+        inset: 0,
+        zIndex: 7,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        background: 'rgba(13, 17, 23, 0.55)',
+      },
+      spinner: {
+        width: 22,
+        height: 22,
+        border: '2px solid rgba(127,127,127,0.35)',
+        borderTopColor: '#2f81f7',
+        borderRadius: '50%',
+        animation: 'fvvspin 0.9s linear infinite',
+      },
+      spinnerText: { fontSize: 12, opacity: 0.8 },
       toast: {
         position: 'absolute',
         left: '50%',
@@ -214,7 +234,7 @@ window.__ModuleLoader__.load({
           const data = await res.json();
           if (!data || data.name !== 'fast-vps-viewer') continue;
           const features = Array.isArray(data.features) ? data.features : [];
-          if (!features.includes('settings') || !features.includes('files')) {
+          if (!features.includes('settings') || !features.includes('files') || !features.includes('terminal')) {
             outdated = true;
             continue;
           }
@@ -309,6 +329,7 @@ window.__ModuleLoader__.load({
       const [filesError, setFilesError] = React.useState('');
       const [toast, setToast] = React.useState('');
       const [dropping, setDropping] = React.useState(false);
+      const [terminalUrl, setTerminalUrl] = React.useState(null);
       const [uploadDir, setUploadDir] = React.useState('~/Downloads');
       const [appFormOpen, setAppFormOpen] = React.useState(false);
       const [appName, setAppName] = React.useState('');
@@ -412,6 +433,18 @@ window.__ModuleLoader__.load({
           }
         }
         if (ok) setToast(t(`Uploaded ${ok}/${total} to ${dir}`, `已上传 ${ok}/${total} 个文件到 ${dir}`));
+      };
+
+      const openTerminal = async () => {
+        setError(null);
+        try {
+          const b = base || (await probePort());
+          setBase(b);
+          const data = await call(b, '/api/terminal', 'POST');
+          setTerminalUrl(data.url);
+        } catch (err) {
+          setError(String(err.message || err));
+        }
       };
 
       const startWith = async (startup) => {
@@ -753,6 +786,21 @@ window.__ModuleLoader__.load({
         );
       }
 
+      const terminalView = terminalUrl ? h('div', { style: styles.root },
+        h('div', { style: styles.bar },
+          h('button', { type: 'button', style: styles.button, onClick: () => setTerminalUrl(null) }, '←'),
+          h('span', { style: styles.grow }, t('Terminal over SSH', 'SSH 命令行（不经过 VNC）')),
+          h('button', { type: 'button', style: styles.button, onClick: () => setTerminalUrl(null) }, t('Close', '关闭')),
+        ),
+        h('iframe', {
+          src: terminalUrl,
+          style: styles.frame,
+          title: t('Terminal', '命令行'),
+        }),
+      ) : null;
+
+      if (terminalView) return terminalView;
+
       const filesView = h('div', { style: styles.root },
         h('div', { style: styles.bar },
           h('button', { type: 'button', style: styles.button, onClick: () => setView('launcher') }, '←'),
@@ -830,6 +878,11 @@ window.__ModuleLoader__.load({
       if (view === 'files' && !viewerUrl) return filesView;
 
       return h('div', { style: styles.root },
+        h('style', null, '@keyframes fvvspin{to{transform:rotate(360deg)}}'),
+        loading ? h('div', { style: styles.spinnerWrap },
+          h('div', { style: styles.spinner }),
+          h('div', { style: styles.spinnerText }, t('Starting the desktop on the VPS…', '正在连接服务器并启动桌面…')),
+        ) : null,
         h('div', { style: styles.launcher },
           h('div', { style: styles.launcherHead },
             h('div', { style: styles.launcherTitle }, t('Open on the VPS', '在 VPS 上打开')),
@@ -838,7 +891,7 @@ window.__ModuleLoader__.load({
           error ? h('div', { style: { color: 'var(--dsw-alias-danger, #f85149)', fontSize: 12 } }, error) : null,
           h('div', { style: styles.grid },
             card('🌐', t('Browser', '浏览器'), browserText(), () => startWith(['browser'])),
-            card('>_', t('Terminal', '命令行'), t('xterm, maximized', 'xterm，铺满窗口'), () => startWith(['xterm'])),
+            card('>_', t('Terminal', '命令行'), t('SSH shell, no desktop', 'SSH 命令行，不启动桌面'), openTerminal),
             card('＋', t('Add an app', '添加自定义 APP'), t('Any command, saved for later', '任意命令，保存下来下次直接用'), () => setAppFormOpen(true)),
             card('📁', t('Files', '文件'), t('Browse, download, delete', '浏览、下载、删除'), async () => { setView('files'); await loadFiles('~'); }),
             card('⚙', t('Settings', '设置'), t('Connection, size, release', '连接、尺寸、回收'), openSettings),

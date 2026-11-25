@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FastVpsViewer · 命令行</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d1117; overflow: hidden; }
+      #term { position: absolute; inset: 0; padding: 6px 8px; box-sizing: border-box; }
+      #status { position: absolute; right: 10px; bottom: 8px; font: 11px ui-monospace, monospace; color: #8b949e; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="term"></div>
+    <div id="status">connecting…</div>
+    <script src="/vendor/xterm/xterm.js"></script>
+    <script src="/assets/terminal.js"></script>
+  </body>
+</html>

@@ -119,6 +119,17 @@ vncserver -kill :1   # → 进程全部退出，无残留
 - 面板「文件」卡片提供浏览/下载/删除/上传；
 - 把本地文件拖到画面 → 上传到 `uploadDir`（默认 `~/Downloads`），再由用户在远端文件选择框里选它——VNC 本身不传文件，不能替用户点浏览器附件。
 
+## 7.3 命令行不再经过 VNC（2026-11-25）
+
+- 「命令行」卡片改为 `POST /api/terminal` → `terminal.html` → `ws://…/term` → 宿主 spawn `ssh -tt <host> 'stty rows R cols C; exec bash -l'`；
+- 浏览器侧用内置 xterm.js（MIT）渲染，面板宽高换算成 PTY 大小；
+- 好处：不启动 X/VNC，1 秒级可用；关标签即断开 SSH；
+- 局限：PTY 大小在打开时固定，之后缩放面板不会重排；`ssh -tt` 依赖服务器允许分配 pty。
+
+## 7.4 启动动画（2026-11-25）
+
+浏览器会话启动要 4–8 秒（SSH + Xtigervnc + 浏览器），面板在 `phase=starting` 时显示旋转指示 + "正在连接服务器并启动桌面…"，避免看起来卡死。
+
 ## 8. 里程碑
 
 - **M0 环境验证** ✅ 已在目标 VPS 上跑通 TigerVNC 起停。

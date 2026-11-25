@@ -358,10 +358,17 @@ class Controller {
     }
 
     if (url.pathname === '/api/ping') {
-      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings', 'files', 'browser', 'launcher'], pid: process.pid });
+      return json(res, 200, { name, version: VERSION, port: this.viewerPort, features: ['settings', 'files', 'browser', 'terminal', 'launcher'], pid: process.pid });
     }
     if (url.pathname === '/api/status') return json(res, 200, this.statusPayload());
     if (url.pathname === '/api/logs') return json(res, 200, { lines: this.logs.slice(-200) });
+    if (url.pathname === '/api/terminal' && req.method === 'POST') {
+      this.termToken = crypto.randomBytes(18).toString('hex');
+      return json(res, 200, {
+        ok: true,
+        url: `http://127.0.0.1:${this.viewerPort}/terminal.html?token=${this.termToken}`,
+      });
+    }
     if (url.pathname === '/api/files' && req.method === 'GET') {
       this.listFiles(url.searchParams.get('path') || this.cfg.filesRoot)
         .then((payload) => json(res, 200, payload))
@@ -425,6 +432,15 @@ class Controller {
     }
     if (url.pathname.startsWith('/assets/')) {
       return this.serveFile(res, safeJoin(path.join(ROOT, 'viewer'), url.pathname.slice('/assets/'.length)));
+    }
+    if (url.pathname === '/terminal.html') {
+      return this.serveFile(res, path.join(ROOT, 'viewer', 'terminal.html'));
+    }
+    if (url.pathname === '/assets/terminal.js') {
+      return this.serveFile(res, path.join(ROOT, 'viewer', 'terminal.js'));
+    }
+    if (url.pathname.startsWith('/vendor/xterm/')) {
+      return this.serveFile(res, safeJoin(path.join(ROOT, 'vendor', 'xterm'), url.pathname.slice('/vendor/xterm/'.length)));
     }
     if (url.pathname.startsWith('/vendor/novnc/')) {
       return this.serveFile(res, safeJoin(path.join(ROOT, 'vendor', 'novnc'), url.pathname.slice('/vendor/novnc/'.length)));
@@ -597,7 +613,7 @@ class Controller {
 
   handleUpgrade(req, socket, head) {
     const url = new URL(req.url, `http://127.0.0.1:${this.viewerPort}`);
-    if (url.pathname !== '/ws') return socket.destroy();
+    if (url.pathname === '/term') return this.handleTerminal(req, socket, url);
     if (!this.token || url.searchParams.get('token') !== this.token) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       return socket.destroy();
@@ -649,6 +665,56 @@ class Controller {
     upstream.on('close', () => shutdown('upstream close'));
     upstream.on('error', (err) => shutdown(`upstream error: ${err.message}`));
     if (head && head.length) upstream.write(head);
+  }
+
+  handleTerminal(req, socket, url) {
+    if (!this.termToken || url.searchParams.get('token') !== this.termToken) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      return socket.destroy();
+    }
+    const key = req.headers['sec-websocket-key'];
+    if (!key) return socket.destroy();
+    const accept = crypto.createHash('sha1')
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+    const proto = req.headers['sec-websocket-protocol'];
+    const headers = [
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      `Sec-WebSocket-Accept: ${accept}`,
+    ];
+    if (proto) headers.push(`Sec-WebSocket-Protocol: ${String(proto).split(',')[0].trim()}`);
+    socket.write(`${headers.join('\r\n')}\r\n\r\n`);
+
+    const cols = Math.max(20, Math.min(300, Number.parseInt(url.searchParams.get('cols') || '100', 10) || 100));
+    const rows = Math.max(8, Math.min(100, Number.parseInt(url.searchParams.get('rows') || '30', 10) || 30));
+    const remote = [
+      `export TERM=xterm-256color`,
+      `stty rows ${rows} cols ${cols} 2>/dev/null`,
+      'exec bash -l 2>/dev/null || exec sh -l',
+    ].join('; ');
+    const shell = spawn('ssh', [...sshBaseArgs(this.cfg), '-tt', this.cfg.sshHost, remote], {
+      env: { ...process.env, ...this.childEnv },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const ws = new WsFrameChannel(socket);
+    let closed = false;
+    const shutdown = () => {
+      if (closed) return;
+      closed = true;
+      try { shell.kill('SIGTERM'); } catch {}
+      try { socket.destroy(); } catch {}
+    };
+    ws.onmessage = (payload) => {
+      if (!shell.stdin.destroyed) shell.stdin.write(payload);
+    };
+    shell.stdout.on('data', (chunk) => ws.sendBinary(chunk));
+    shell.stderr.on('data', (chunk) => ws.sendBinary(Buffer.from(chunk)));
+    shell.on('close', shutdown);
+    shell.on('error', shutdown);
+    socket.on('close', shutdown);
+    socket.on('error', shutdown);
+    this.log('terminal connected');
   }
 
   pushLog(line) {

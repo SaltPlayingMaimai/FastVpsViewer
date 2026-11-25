@@ -86,7 +86,7 @@ Override fields in your profile's `cordis.patch.yml` under `id: fast-vps-viewer`
 
 ### Change settings in the panel
 
-The pane opens as a launcher: **Browser**, **Terminal**, **Files**, **Add an app**, **Settings**. Pick a card and the session starts with that program; saved apps show up under "My apps" for one-click starts.
+The pane opens as a launcher: **Browser**, **Terminal** (a real SSH shell, not VNC), **Files**, **Add an app**, **Settings**. Pick a card; the browser path shows a loading animation while the session starts; saved apps show up under "My apps" for one-click starts.
 
 The Browser card is not hardcoded to Firefox: it asks the server (`GET /api/browser`) which binary exists — first of firefox, firefox-esr, chromium, google-chrome, epiphany — and shows that name on the card. When it cannot tell yet, it says "Auto-picks Chrome or Firefox".
 
@@ -101,6 +101,14 @@ Saving writes `~/.dsh/fast-vps-viewer.json` (mode 600), which takes priority ove
 | Use my ~/.ssh/config + agent (recommended) | The plugin runs exactly `ssh <host>`: `~/.ssh/config` (Host/User/Port/IdentityFile/ProxyJump) applies and ssh-agent keys are used. It adds `BatchMode=yes`, so it never prompts. | Your `ssh alias` already works in a terminal |
 | Specific private key file | Adds `-i <file> -o IdentitiesOnly=yes -o PreferredAuthentications=publickey`, so a per-host default identity in the config is ignored. | Several keys; you want to pick one |
 | Password | The stored password (0600, never returned by the API) is handed to ssh through `SSH_ASKPASS`. | The server only allows password login |
+
+### The Terminal card is a real SSH shell, not VNC
+
+It does not start a desktop: the card opens an xterm.js terminal connected straight to the server over `ssh -tt`, so there is no X server and no VNC to wait for — it is usually usable within a second.
+
+- the panel size becomes the PTY's cols/rows at open time (resizing the panel later does not change the remote PTY);
+- closing the tab drops the SSH connection, leaving nothing behind;
+- xterm.js is bundled (MIT, see `vendor/xterm/LICENSE`).
 
 ### Files
 
