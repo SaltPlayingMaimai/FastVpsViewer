@@ -223,6 +223,14 @@ GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/
 - 性能：`auxExec` 用 `ControlMaster=auto` + 固定 ControlPath（`ControlPersist=60`），文件/探测类请求共用一条连接，实测首次 2–4s、之后 0.4–0.5s；
 - 修了 `listFiles` 同步抛错导致宿主 uncaught exception 退出的问题（改为 async）。
 
+## 剪贴板桥（2026-11-25）
+
+- `client.js` 的剪贴板面板 → `iframe.contentWindow.postMessage({type:'fvv-paste',text,sendCtrlV})`；
+- `viewer/app.js` 监听 message → `rfb.clipboardPasteFrom()`；`sendCtrlV` 时发 `Control_L`+`v` 的按下/抬起（间隔 60ms）；
+- 反向：`rfb.addEventListener('clipboard')` → `postMessage({type:'fvv-clipboard',text})`，面板「取回远端」可写入本地剪贴板；
+- 实测：无头环境里点「粘贴到远端」，iframe 收到 `{"type":"fvv-paste","text":"hunter2-password","sendCtrlV":true}` 且无报错；真实粘贴效果需在真机确认（焦点位置、站点是否允许密码框粘贴）；
+- 限制：仅文本；依赖 TigerVNC 剪贴板。
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

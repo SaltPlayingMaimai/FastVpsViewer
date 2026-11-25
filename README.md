@@ -111,6 +111,17 @@ It does not start a desktop: the card opens an xterm.js terminal connected strai
 - closing the tab drops the SSH connection, leaving nothing behind;
 - xterm.js is bundled (MIT, see `vendor/xterm/LICENSE`).
 
+### Clipboard (send local text to the remote page)
+
+The pane toolbar has a **Clipboard** button:
+
+1. copy text locally (a password, say), open the panel and paste it with `⌘V`;
+2. press **Paste into remote**: the text goes to the remote clipboard and one `Ctrl+V` is sent — if focus is in a password/input field, it lands there immediately;
+3. **Only copy** puts it on the remote clipboard without pressing anything;
+4. **Pull remote** brings the remote clipboard back to this machine (when reading is blocked, the panel falls back to showing it for a manual copy).
+
+Limits: this uses the VNC clipboard channel (TigerVNC supports it). If a site blocks paste on password fields, or focus is elsewhere, the remote `Ctrl+V` does nothing — the text is still on the remote clipboard. Text only, no files or images.
+
 ### Files
 
 The launcher has a **Files** card: browse the remote tree (starts at `~`, bounded by `filesRoot`), download, delete, and upload.

@@ -16,6 +16,7 @@ const autoResize = params.get('autoresize') !== '0';
 if (embedded) document.body.dataset.embedded = 'true';
 let rfb = null;
 let timer = null;
+let remoteClipboard = '';
 
 function setState(state, text) {
   dot.dataset.state = state;
@@ -80,6 +81,12 @@ function connect(wsUrl) {
     setState('error', '认证失败');
     showOverlay(`认证失败：${event.detail?.reason || 'unknown'}`);
   });
+  rfb.addEventListener('clipboard', (event) => {
+    remoteClipboard = event.detail?.text || '';
+    try {
+      window.parent?.postMessage({ type: 'fvv-clipboard', text: remoteClipboard }, '*');
+    } catch { /* embedded elsewhere */ }
+  });
   rfb.addEventListener('credentialsrequired', () => {
     setState('error', '需要密码');
     showOverlay('远端要求密码，但本插件以无密码回环模式运行。');
@@ -136,6 +143,33 @@ async function boot() {
     }
   }
 }
+
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'fvv-paste' || typeof data.text !== 'string') return;
+  if (!rfb || typeof rfb.clipboardPasteFrom !== 'function') return;
+  rfb.clipboardPasteFrom(data.text);
+  if (data.sendCtrlV && typeof rfb.sendKey === 'function') {
+    // Control_L + v, pressed and released in order
+    rfb.sendKey(0xffe3, 'ControlLeft', true);
+    rfb.sendKey(0x76, 'KeyV', true);
+    setTimeout(() => {
+      rfb.sendKey(0x76, 'KeyV', false);
+      rfb.sendKey(0xffe3, 'ControlLeft', false);
+    }, 60);
+  }
+  try {
+    window.parent?.postMessage({ type: 'fvv-paste-ack' }, '*');
+  } catch { /* ignore */ }
+});
+
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'fvv-read-clipboard') {
+    try {
+      window.parent?.postMessage({ type: 'fvv-clipboard', text: remoteClipboard }, '*');
+    } catch { /* ignore */ }
+  }
+});
 
 releaseBtn.addEventListener('click', async () => {
   releaseBtn.disabled = true;

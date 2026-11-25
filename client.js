@@ -180,6 +180,21 @@ window.__ModuleLoader__.load({
         animation: 'fvvspin 0.9s linear infinite',
       },
       spinnerText: { fontSize: 12, opacity: 0.8 },
+      clipPanel: {
+        position: 'absolute',
+        top: 40,
+        right: 8,
+        width: 320,
+        zIndex: 6,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        padding: 10,
+        borderRadius: 10,
+        background: 'rgba(22, 27, 34, 0.97)',
+        border: '1px solid rgba(127,127,127,0.35)',
+        color: '#e6edf3',
+      },
       inlineLoading: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', fontSize: 12, opacity: 0.8 },
       spinnerSmall: {
         width: 12,
@@ -341,6 +356,11 @@ window.__ModuleLoader__.load({
       const [toast, setToast] = React.useState('');
       const [dropping, setDropping] = React.useState(false);
       const [terminalUrl, setTerminalUrl] = React.useState(null);
+      const [clipOpen, setClipOpen] = React.useState(false);
+      const [clipText, setClipText] = React.useState('');
+      const [remoteClip, setRemoteClip] = React.useState('');
+      const [clipNotice, setClipNotice] = React.useState('');
+      const frameRef = React.useRef(null);
       const [uploadDir, setUploadDir] = React.useState('~/Downloads');
       const [appFormOpen, setAppFormOpen] = React.useState(false);
       const [appName, setAppName] = React.useState('');
@@ -348,6 +368,27 @@ window.__ModuleLoader__.load({
       const alive = React.useRef(true);
 
       React.useEffect(() => () => { alive.current = false; }, []);
+
+      React.useEffect(() => {
+        const onMessage = (event) => {
+          const data = event.data;
+          if (!data || typeof data !== 'object') return;
+          if (data.type === 'fvv-clipboard') {
+            setRemoteClip(data.text || '');
+          } else if (data.type === 'fvv-paste-ack') {
+            setClipNotice(t('Sent to the remote clipboard.', '已发送到远端剪贴板。'));
+          }
+        };
+        window.addEventListener('message', onMessage);
+        return () => window.removeEventListener('message', onMessage);
+      }, []);
+
+      const sendToRemote = (withPaste) => {
+        const frame = frameRef.current;
+        if (!frame || !frame.contentWindow) return;
+        frame.contentWindow.postMessage({ type: 'fvv-paste', text: clipText, sendCtrlV: withPaste }, '*');
+        setClipNotice(t('Sending…', '正在发送…'));
+      };
 
       const refresh = React.useCallback(async () => {
         try {
@@ -795,10 +836,41 @@ window.__ModuleLoader__.load({
         },
           h('div', { style: styles.bar },
             h('span', { style: styles.grow }, meta),
+            h('button', { type: 'button', style: styles.button, onClick: () => setClipOpen((v) => !v) }, t('Clipboard', '剪贴板')),
             h('button', { type: 'button', style: styles.button, onClick: openSettings }, t('Settings', '设置')),
           ),
           dropping ? h('div', { style: styles.dropZone }, t('Drop files to upload to the VPS', '松手即上传到 VPS')) : null,
+          clipOpen ? h('div', { style: styles.clipPanel },
+            h('div', { style: styles.groupTitle }, t('Clipboard bridge', '剪贴板')),
+            h('textarea', {
+              style: { ...styles.input, height: 76, resize: 'vertical', fontFamily: 'ui-monospace, monospace' },
+              value: clipText,
+              placeholder: t('Paste here (⌘V), then send it to the remote desktop', '在这里粘贴（⌘V），然后发送到远端桌面'),
+              onChange: (e) => setClipText(e.target.value),
+            }),
+            h('div', { style: { ...styles.row, gap: 8, flexWrap: 'wrap' } },
+              h('button', { type: 'button', style: styles.primary, disabled: !clipText, onClick: () => sendToRemote(true) }, t('Paste into remote', '粘贴到远端')),
+              h('button', { type: 'button', style: styles.button, disabled: !clipText, onClick: () => sendToRemote(false) }, t('Only copy', '只放入剪贴板')),
+              h('button', {
+                type: 'button',
+                style: styles.button,
+                onClick: () => {
+                  frameRef.current?.contentWindow?.postMessage({ type: 'fvv-read-clipboard' }, '*');
+                  if (remoteClip) {
+                    navigator.clipboard?.writeText(remoteClip).then(
+                      () => setClipNotice(t('Remote clipboard copied.', '已复制远端剪贴板。')),
+                      () => setClipText(remoteClip),
+                    );
+                  }
+                },
+              }, t('Pull remote', '取回远端')),
+              h('button', { type: 'button', style: styles.button, onClick: () => setClipOpen(false) }, t('Close', '关闭')),
+            ),
+            remoteClip ? h('div', { style: styles.help }, `${t('Remote has', '远端剪贴板')}: ${remoteClip.slice(0, 120)}`) : null,
+            clipNotice ? h('div', { style: styles.notice }, clipNotice) : null,
+          ) : null,
           h('iframe', {
+            ref: frameRef,
             src: viewerUrl + (viewerUrl.includes('?') ? '&' : '?') + 'chrome=0',
             style: styles.frame,
             allow: 'clipboard-read; clipboard-write',
