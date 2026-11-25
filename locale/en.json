@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "FastVpsViewer",
+    "description": "Open an on-demand Openbox desktop from your own VPS inside the DSH right sidebar. Nothing runs remotely until you start it, and it is released when you stop, close, or go idle.",
+    "detail": "docs/DETAIL.md"
+  }
+}

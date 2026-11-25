@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "FastVpsViewer",
+    "description": "在 DSH 右侧栏按需打开你自己 VPS 上的 Openbox 桌面。不启动时远端不跑任何图形进程，结束或空闲后自动释放。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

@@ -1,0 +1,113 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bar: #161b22;
+  --line: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #2f81f7;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #f85149;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  overflow: hidden;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.dot[data-state="starting"] { background: var(--warn); }
+.dot[data-state="running"] { background: var(--ok); }
+.dot[data-state="error"] { background: var(--err); }
+.dot[data-state="idle"] { background: var(--muted); }
+
+.label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spacer { flex: 1; }
+
+.btn {
+  font: inherit;
+  color: var(--text);
+  background: #21262d;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.btn:hover { background: #30363d; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); }
+
+#screen-wrap {
+  position: relative;
+  height: calc(100% - 34px);
+  overflow: hidden;
+}
+
+#screen {
+  width: 100%;
+  height: 100%;
+}
+#screen canvas {
+  display: block;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(13, 17, 23, 0.92);
+  color: var(--muted);
+}
+.overlay[hidden] { display: none; }
+.overlay p { margin: 0; max-width: 460px; white-space: pre-wrap; }
+
+body[data-embedded='true'] .bar { display: none; }
+body[data-embedded='true'] #screen-wrap { height: 100%; }
+
+.hint {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}

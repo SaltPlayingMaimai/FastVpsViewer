@@ -1,0 +1,58 @@
+{
+  "name": "fast-vps-viewer",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Open an on-demand Openbox desktop from your VPS inside the DeepSeek Harness right sidebar.",
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "vnc",
+    "novnc",
+    "remote-desktop",
+    "ssh",
+    "openbox"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "viewer",
+    "vendor",
+    "docs",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "plan.md",
+    "handoff.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "verify": "node test/client-smoke.mjs && node scripts/check-docs.mjs",
+    "smoke": "node test/smoke.mjs"
+  }
+}
