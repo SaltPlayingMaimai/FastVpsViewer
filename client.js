@@ -180,6 +180,15 @@ window.__ModuleLoader__.load({
         animation: 'fvvspin 0.9s linear infinite',
       },
       spinnerText: { fontSize: 12, opacity: 0.8 },
+      inlineLoading: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', fontSize: 12, opacity: 0.8 },
+      spinnerSmall: {
+        width: 12,
+        height: 12,
+        border: '2px solid rgba(127,127,127,0.35)',
+        borderTopColor: '#2f81f7',
+        borderRadius: '50%',
+        animation: 'fvvspin 0.9s linear infinite',
+      },
       toast: {
         position: 'absolute',
         left: '50%',
@@ -327,6 +336,8 @@ window.__ModuleLoader__.load({
       const [view, setView] = React.useState('launcher');
       const [files, setFiles] = React.useState(null);
       const [filesError, setFilesError] = React.useState('');
+      const [filesLoading, setFilesLoading] = React.useState(false);
+      const pathRef = React.useRef(null);
       const [toast, setToast] = React.useState('');
       const [dropping, setDropping] = React.useState(false);
       const [terminalUrl, setTerminalUrl] = React.useState(null);
@@ -373,13 +384,21 @@ window.__ModuleLoader__.load({
 
       const loadFiles = async (target) => {
         setFilesError('');
+        setFilesLoading(true);
         try {
           const b = base || (await probePort());
           setBase(b);
           const data = await call(b, `/api/files?path=${encodeURIComponent(target)}`);
-          if (alive.current) setFiles(data);
+          if (!alive.current) return;
+          const entries = (data.entries || []).slice().sort((a, b2) => {
+            if (a.type !== b2.type) return a.type === 'dir' ? -1 : 1;
+            return a.name.localeCompare(b2.name);
+          });
+          setFiles({ ...data, entries });
         } catch (err) {
           if (alive.current) setFilesError(String(err.message || err));
+        } finally {
+          if (alive.current) setFilesLoading(false);
         }
       };
 
@@ -398,6 +417,7 @@ window.__ModuleLoader__.load({
       const deleteFile = async (file) => {
         const target = files.path === '~' ? `~/${file.name}` : `${files.path}/${file.name}`;
         if (typeof window.confirm === 'function' && !window.confirm(`${t('Delete', '删除')} ${target}?`)) return;
+        setFilesLoading(true);
         try {
           const b = base || lastBase;
           const res = await fetch(`${b}/api/files/delete`, {
@@ -407,9 +427,11 @@ window.__ModuleLoader__.load({
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-          loadFiles(files.path);
+          await loadFiles(files.path);
         } catch (err) {
           setFilesError(String(err.message || err));
+        } finally {
+          setFilesLoading(false);
         }
       };
 
@@ -802,9 +824,29 @@ window.__ModuleLoader__.load({
       if (terminalView) return terminalView;
 
       const filesView = h('div', { style: styles.root },
+        h('style', null, '@keyframes fvvspin{to{transform:rotate(360deg)}}'),
         h('div', { style: styles.bar },
           h('button', { type: 'button', style: styles.button, onClick: () => setView('launcher') }, '←'),
-          h('span', { style: styles.grow }, files ? files.path : '~'),
+          h('input', {
+            key: files ? files.path : 'root',
+            ref: pathRef,
+            defaultValue: files ? files.path : '~',
+            style: { ...styles.input, flex: 1, minWidth: 0, fontFamily: 'ui-monospace, monospace' },
+            spellCheck: false,
+            onKeyDown: (e) => {
+              if (e.key !== 'Enter') return;
+              const target = (pathRef.current?.value || '~').trim() || '~';
+              loadFiles(target);
+            },
+            placeholder: t('Type a path and press Enter', '输入路径后回车'),
+            'aria-label': t('Path', '路径'),
+          }),
+          h('button', {
+            type: 'button',
+            style: styles.button,
+            disabled: filesLoading,
+            onClick: () => loadFiles((pathRef.current?.value || '~').trim() || '~'),
+          }, t('Go', '前往')),
           h('button', {
             type: 'button',
             style: styles.button,
@@ -821,14 +863,17 @@ window.__ModuleLoader__.load({
           h('button', {
             type: 'button',
             style: styles.button,
-            disabled: !files?.parent,
+            disabled: !files?.parent || filesLoading,
             onClick: () => files?.parent && loadFiles(files.parent),
           }, t('Up', '上一级')),
         ),
         filesError ? h('div', { style: { ...styles.help, color: 'var(--dsw-alias-danger, #f85149)', padding: '6px 10px' } }, filesError) : null,
         h('div', { style: styles.fileList },
-          !files ? h('div', { style: styles.help }, t('Loading…', '加载中…')) : null,
-          files?.entries?.length === 0 ? h('div', { style: styles.help }, t('This folder is empty', '这个目录是空的')) : null,
+          filesLoading ? h('div', { style: styles.inlineLoading },
+            h('div', { style: styles.spinnerSmall }),
+            h('span', null, t('Loading…', '加载中…')),
+          ) : null,
+          !filesLoading && files?.entries?.length === 0 ? h('div', { style: styles.help }, t('This folder is empty', '这个目录是空的')) : null,
           (files?.entries || []).map((entry) => h('div', { key: entry.name, style: styles.fileRow },
             h('button', {
               type: 'button',

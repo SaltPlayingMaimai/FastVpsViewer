@@ -107,6 +107,8 @@ class Controller {
 
   async dispose() {
     this.clearTimers();
+    if (this.aux) { try { this.aux.kill('SIGTERM'); } catch { /* gone */ } this.aux = null; }
+    if (this.auxPath) { try { fs.unlinkSync(this.auxPath); } catch { /* gone */ } }
     await this.stop({ reason: 'dispose', quiet: true }).catch(() => {});
     await new Promise((resolve) => {
       if (!this.server) return resolve();
@@ -465,10 +467,15 @@ class Controller {
     }
   }
 
-  listFiles(rawPath) {
+  async auxExec(script, timeout = 20000) {
+    this.auxPath = this.auxPath || controlPathFor(99);
+    return sshExec(this.cfg, script, timeout, this.auxPath, this.childEnv, 'auto');
+  }
+
+  async listFiles(rawPath) {
     const target = remotePath(rawPath, this.cfg);
     const script = `find ${target} -mindepth 1 -maxdepth 1 -printf '%y\\t%s\\t%T@\\t%f\\n' 2>/dev/null `;
-    return sshExec(this.cfg, script, 20000, null, this.childEnv).then((res) => {
+    return this.auxExec(script, 20000).then((res) => {
       if (res.code === 255) throw new Error(tailText(res.stderr) || 'ssh 连接失败');
       const entries = res.stdout
         .split('\n')
@@ -498,7 +505,7 @@ class Controller {
     const target = remotePath(rawPath, this.cfg);
     if (target === '$HOME' || target === '"$HOME"' || target.endsWith('/')) throw new Error('拒绝删除根目录');
     const script = `if [ -d ${target} ]; then rmdir -- ${target} 2>/dev/null || rm -rf -- ${target}; else rm -f -- ${target}; fi`;
-    const res = await sshExec(this.cfg, script, 20000, null, this.childEnv);
+    const res = await this.auxExec(script, 20000);
     if (res.code === 255) throw new Error(tailText(res.stderr) || 'ssh 连接失败');
     return { ok: true };
   }
@@ -540,7 +547,7 @@ class Controller {
     const now = Date.now();
     if (this.browserCache && now - this.browserCache.at < 60000) return this.browserCache.value;
     const probe = 'for b in firefox firefox-esr chromium chromium-browser google-chrome epiphany-browser; do command -v "$b" >/dev/null 2>&1 && { echo "$b"; exit 0; }; done; echo none';
-    const res = await sshExec(this.cfg, probe, 20000);
+    const res = await this.auxExec(probe, 20000);
     const found = (res.stdout || '').trim().split('\n').pop() || '';
     if (!found) throw new Error(tailText(res.stderr) || 'ssh 没有返回结果');
     const value = { browser: found === 'none' ? null : found };
@@ -1011,9 +1018,10 @@ function buildXstartup(cfg) {
   return lines.join('\n');
 }
 
-async function sshExec(cfg, script, timeout, controlPath, env) {
+async function sshExec(cfg, script, timeout, controlPath, env, controlMode = 'no') {
   const args = controlPath
-    ? [...sshBaseArgs(cfg), '-o', `ControlPath=${controlPath}`, '-o', 'ControlMaster=no', cfg.sshHost, script]
+    ? [...sshBaseArgs(cfg), '-o', `ControlPath=${controlPath}`,
+      '-o', `ControlMaster=${controlMode}`, '-o', 'ControlPersist=60', cfg.sshHost, script]
     : sshArgs(cfg, [script]);
   let res = await run('ssh', args, { timeout, env });
   if (res.code === 255) {

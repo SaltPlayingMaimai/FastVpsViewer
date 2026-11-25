@@ -115,9 +115,12 @@ It does not start a desktop: the card opens an xterm.js terminal connected strai
 
 The launcher has a **Files** card: browse the remote tree (starts at `~`, bounded by `filesRoot`), download, delete, and upload.
 
-- Paths are guarded: anything outside `filesRoot` (including `../../etc`) is rejected;
+- the top row is the path box: type `~/code` or `/var/log` and press Enter, next to Go / Upload / Up;
+- every listing shows a loading indicator while the previous rows stay visible;
+- paths are guarded: anything outside `filesRoot` (including `../../etc`) is rejected;
 - Downloads use `GET /api/files/download`, deletes `POST /api/files/delete`, uploads `POST /api/upload`;
-- One upload is capped at 512 MB.
+- one upload is capped at 512 MB;
+- file operations share one persistent multiplexed SSH connection: the first listing takes 2–4 s, later ones are sub-second.
 
 ### Dropping files onto the desktop
 

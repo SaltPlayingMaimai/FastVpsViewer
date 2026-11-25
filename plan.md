@@ -130,6 +130,13 @@ vncserver -kill :1   # → 进程全部退出，无残留
 
 浏览器会话启动要 4–8 秒（SSH + Xtigervnc + 浏览器），面板在 `phase=starting` 时显示旋转指示 + "正在连接服务器并启动桌面…"，避免看起来卡死。
 
+## 7.5 文件浏览的体验（2026-11-25）
+
+- 顶部路径栏可直接输入路径回车跳转（不受控 input + ref，避免 React 重渲染把输入打回去）；
+- 列目录/删除时显示加载指示，旧列表保留在下方，不再"先白屏再出现"；
+- 文件类操作（list/download/delete/upload/探测浏览器）共用一条 `ControlMaster=auto` 的 SSH 多路连接（`ControlPersist=60`），第一次慢、之后亚秒级；
+- 顺带修了一个会让宿主进程崩溃的 bug：`listFiles` 里路径校验同步抛错时没有被 promise 捕获 → 改成 async 方法。
+
 ## 8. 里程碑
 
 - **M0 环境验证** ✅ 已在目标 VPS 上跑通 TigerVNC 起停。

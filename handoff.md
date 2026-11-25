@@ -216,6 +216,13 @@ GitHub 的图片代理（camo）按 URL 缓存，重写历史后同一个 `docs/
 
 | 命令行里没有提示符（一片空白） | 三处叠加：①`exec bash … 2>/dev/null` 把 bash 的 stderr 重定向到了 /dev/null，而 PS1 正是写到 stderr；②bash 的首个提示符要等 ssh 管道里有输入才被 flush；③客户端还没握手完宿主就 spawn，早期字节可能丢 | 去掉 `2>/dev/null`；客户端 open 后先发 `{"init":{cols,rows}}`，宿主收到再 spawn；宿主 spawn 后用 `space+backspace` 每 400ms 轻推一次直到有输出（屏幕上不可见）；实测提示符 `root@claude-test:~#` 正常，`command -v claude` 能找到 `/root/.local/bin/claude` |
 
+## 文件浏览体验（2026-11-25）
+
+- 路径栏：不受控 input（`key` 随目录变化、`defaultValue` 当前路径）+ ref 读取，Enter/「前往」触发 `loadFiles`；合成事件测试可以跳转，但无头 Chromium 里 `input.focus()` 会被打回 BODY，真实点击无法在无头环境验证（真机需人眼确认一次）；
+- 加载态：`filesLoading` 驱动列表顶部的小 spinner，旧行保留；删除也会置 loading；
+- 性能：`auxExec` 用 `ControlMaster=auto` + 固定 ControlPath（`ControlPersist=60`），文件/探测类请求共用一条连接，实测首次 2–4s、之后 0.4–0.5s；
+- 修了 `listFiles` 同步抛错导致宿主 uncaught exception 退出的问题（改为 async）。
+
 ## 下一步
 
 1. **完整重启 DSH Desktop**，检查：右侧栏指南里是否出现「远端桌面」卡片 → 点开后是否有「启动远端桌面」按钮 → 启动后 iframe 里是否出现 **Firefox** 窗口，并且只有**一个**「结束并释放」。

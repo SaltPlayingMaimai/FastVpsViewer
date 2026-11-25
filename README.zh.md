@@ -114,9 +114,12 @@ dsh plugin --profile desktop add /path/to/FastVpsViewer
 
 启动器里多了「文件」卡片：浏览远端目录（默认从 `~` 开始，可用 `filesRoot` 限定范围）、下载、删除、上传。
 
+- 顶部那行就是路径栏：可以直接输入 `~/code`、`/var/log` 回车跳转，旁边还有「前往 / 上传 / 上一级」；
+- 每次列目录都会显示加载指示，之前的列表保留在下面，不会闪成空白；
 - 路径有护栏：只允许 `filesRoot` 之下，`../../etc` 之类会被拒绝；
 - 下载走 `GET /api/files/download`，删除走 `POST /api/files/delete`，上传走 `POST /api/upload`；
-- 上传单个文件上限 512 MB。
+- 上传单个文件上限 512 MB；
+- 文件操作复用一条常驻的 SSH 多路连接，第一次列目录约 2–4 秒，之后是亚秒级。
 
 ### 把文件拖进画面
 
